@@ -35,4 +35,11 @@ config KSU_KPROBES_HOOK
 	  Enable KPROBES, KRETPROBES and TRACEPOINT hook for KernelSU core.
 	  This should not be used on kernel below 5.10.
 
+config KSU_LSM_SECURITY_HOOKS
+	bool "KernelSU LSM Security Hooks"
+	depends on KSU
+	default y
+	help
+	  Enable Linux Security Module (LSM) hooks support for KernelSU-Next.
+
 endmenu

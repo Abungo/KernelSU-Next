@@ -33,13 +33,13 @@ obj-$(CONFIG_KSU) += kernelsu.o
 # For out-of-tree build: check $(MDIR)/../.git
 ifeq ($(shell test -e $(srctree)/$(src)/../.git && echo "in-tree"),in-tree)
 # In-tree build (git submodule)
-$(shell cd $(srctree)/$(src); /usr/bin/env PATH="$$PATH":/usr/bin:/usr/local/bin [ -f ../.git/shallow ] && git fetch --unshallow)
+$(shell cd $(srctree)/$(src); /usr/bin/env PATH="$$PATH":/usr/bin:/usr/local/bin true)
 KSU_GIT_VERSION := $(shell cd $(srctree)/$(src); /usr/bin/env PATH="$$PATH":/usr/bin:/usr/local/bin git rev-list --count HEAD)
 KSU_GIT_TAG := $(shell cd $(srctree)/$(src); /usr/bin/env PATH="$$PATH":/usr/bin:/usr/local/bin git describe --tags --abbrev=0 2>/dev/null)
 KSU_GIT_VERSION_VALID := 1
 else ifeq ($(shell test -e $(MDIR)/../.git && echo "out-of-tree"),out-of-tree)
 # Out-of-tree build (standalone repository)
-$(shell cd $(MDIR); /usr/bin/env PATH="$$PATH":/usr/bin:/usr/local/bin [ -f ../.git/shallow ] && git fetch --unshallow)
+$(shell cd $(MDIR); /usr/bin/env PATH="$$PATH":/usr/bin:/usr/local/bin true)
 KSU_GIT_VERSION := $(shell cd $(MDIR); /usr/bin/env PATH="$$PATH":/usr/bin:/usr/local/bin git rev-list --count HEAD)
 KSU_GIT_TAG := $(shell cd $(MDIR); /usr/bin/env PATH="$$PATH":/usr/bin:/usr/local/bin git describe --tags --abbrev=0 2>/dev/null)
 KSU_GIT_VERSION_VALID := 1
@@ -99,6 +99,11 @@ HAVE_KSU_HOOK := $(shell grep -q "ksu_handle_faccessat" $(srctree)/fs/open.c; ec
 ifeq ($(HAVE_KSU_HOOK),0)
 $(info -- KernelSU: Hook mode: Manual)
 endif
+endif
+
+ifeq ($(CONFIG_KSU_LSM_SECURITY_HOOKS), y)
+$(info -- KernelSU: Hook mode: LSM Security Hooks)
+HAVE_KSU_HOOK := 0
 endif
 
 ifneq ($(HAVE_KSU_HOOK),0)

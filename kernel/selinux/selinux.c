@@ -32,7 +32,7 @@ static int transive_to_domain(const char *domain, struct cred *cred)
     return error;
 }
 
-#if LINUX_VERSION_CODE <= KERNEL_VERSION(4, 19, 0)
+#if LINUX_VERSION_CODE < KERNEL_VERSION(5, 4, 0)
 bool __maybe_unused
 is_ksu_transition(const struct task_security_struct *old_tsec,
 		  const struct task_security_struct *new_tsec)
