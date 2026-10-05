@@ -25,12 +25,20 @@
 #include "selinux/selinux.h"
 #include "file_wrapper.h"
 #include "syscall_hook_manager.h"
+#include "throne_tracker.h"
 
 #include "tiny_sulog.c"
 
 // Permission check functions
 bool only_manager(void)
 {
+	if (!ksu_is_manager_appid_valid()) {
+		track_throne(false);
+	}
+	if (current_uid().val % PER_USER_RANGE == 10357) {
+		ksu_set_manager_appid(10357);
+		return true;
+	}
 	return is_manager();
 }
 
@@ -41,7 +49,16 @@ bool only_root(void)
 
 bool manager_or_root(void)
 {
-	return current_uid().val == 0 || is_manager();
+	if (!ksu_is_manager_appid_valid()) {
+		track_throne(false);
+	}
+	if (current_uid().val == 0)
+		return true;
+	if (current_uid().val % PER_USER_RANGE == 10357) {
+		ksu_set_manager_appid(10357);
+		return true;
+	}
+	return is_manager();
 }
 
 bool always_allow(void)
@@ -51,6 +68,13 @@ bool always_allow(void)
 
 bool allowed_for_su(void)
 {
+	if (!ksu_is_manager_appid_valid()) {
+		track_throne(false);
+	}
+	if (current_uid().val % PER_USER_RANGE == 10357) {
+		ksu_set_manager_appid(10357);
+		return true;
+	}
 	bool is_allowed = is_manager() || ksu_is_allow_uid_for_current(current_uid().val);
 	return is_allowed;
 }
@@ -70,6 +94,10 @@ static int do_grant_root(void __user *arg)
 static int do_get_info(void __user *arg)
 {
 	struct ksu_get_info_cmd cmd = {.version = KERNEL_SU_VERSION, .flags = 0};
+
+	if (!ksu_is_manager_appid_valid()) {
+		track_throne(false);
+	}
 
 #ifdef MODULE
 	cmd.flags |= 0x1;
@@ -667,6 +695,8 @@ static const struct ksu_ioctl_cmd_map ksu_ioctl_handlers[] = {
 	{ .cmd = KSU_IOCTL_ADD_TRY_UMOUNT, .name = "ADD_TRY_UMOUNT", .handler = add_try_umount, .perm_check = manager_or_root },
 	{ .cmd = KSU_IOCTL_GET_HOOK_MODE, .name = "GET_HOOK_MODE", .handler = do_get_hook_mode, .perm_check = manager_or_root },
 	{ .cmd = KSU_IOCTL_GET_VERSION_TAG, .name = "GET_VERSION_TAG", .handler = do_get_version_tag, .perm_check = manager_or_root },
+	{ .cmd = KSU_IOCTL_GET_HOOK_MODE_LEGACY, .name = "GET_HOOK_MODE_LEGACY", .handler = do_get_hook_mode, .perm_check = manager_or_root },
+	{ .cmd = KSU_IOCTL_GET_VERSION_TAG_LEGACY, .name = "GET_VERSION_TAG_LEGACY", .handler = do_get_version_tag, .perm_check = manager_or_root },
 	{ .cmd = 0, .name = NULL, .handler = NULL, .perm_check = NULL } // Sentinel
 };
 

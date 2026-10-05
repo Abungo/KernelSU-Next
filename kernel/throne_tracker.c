@@ -8,6 +8,7 @@
 
 #include "allowlist.h"
 #include "klog.h" // IWYU pragma: keep
+#include "ksu.h"
 #include "manager.h"
 #include "throne_tracker.h"
 
@@ -306,10 +307,19 @@ static bool is_uid_exist(uid_t uid, char *package, void *data)
 
 void track_throne(bool prune_only)
 {
+	ksu_observer_init();
+
+	const struct cred *saved = NULL;
+	if (ksu_cred) {
+		saved = override_creds(ksu_cred);
+	}
+
 	struct file *fp = filp_open(SYSTEM_PACKAGES_LIST_PATH, O_RDONLY, 0);
 	if (IS_ERR(fp)) {
 		pr_err("%s: open " SYSTEM_PACKAGES_LIST_PATH " failed: %ld\n", __func__,
 			PTR_ERR(fp));
+		if (saved)
+			revert_creds(saved);
 		return;
 	}
 
@@ -340,14 +350,16 @@ void track_throne(bool prune_only)
 		char *package = strsep(&tmp, delim);
 		char *uid = strsep(&tmp, delim);
 		if (!uid || !package) {
-			pr_err("update_uid: package or uid is NULL!\n");
-			break;
+			kfree(data);
+			line_start = pos;
+			continue;
 		}
 
 		u32 res;
 		if (kstrtou32(uid, 10, &res)) {
-			pr_err("update_uid: uid parse err\n");
-			break;
+			kfree(data);
+			line_start = pos;
+			continue;
 		}
 		data->uid = res;
 		strncpy(data->package, package, KSU_MAX_PACKAGE_NAME);
@@ -361,15 +373,52 @@ void track_throne(bool prune_only)
 	struct uid_data *np;
 	struct uid_data *n;
 
-	if (prune_only)
+	if (prune_only && ksu_is_manager_appid_valid())
 		goto prune;
+
+	// first, check system manager paths
+	static const char *system_manager_paths[] = {
+		"/system/product/app/KernelSU/KernelSU.apk",
+		"/product/app/KernelSU/KernelSU.apk",
+		"/system/app/KernelSU/KernelSU.apk",
+	};
+	bool system_manager_exists = false;
+	int p;
+	for (p = 0; p < ARRAY_SIZE(system_manager_paths); p++) {
+		if (is_manager_apk((char *)system_manager_paths[p])) {
+			system_manager_exists = true;
+			pr_info("Found system manager at %s\n", system_manager_paths[p]);
+			struct uid_data *snp;
+			list_for_each_entry (snp, &uid_list, list) {
+				if (strncmp(snp->package, "com.rifsxd.ksunext", KSU_MAX_PACKAGE_NAME) == 0 ||
+				    strncmp(snp->package, "yagyzd.amjlhq.kkingw", KSU_MAX_PACKAGE_NAME) == 0 ||
+				    strncmp(snp->package, "me.weishu.kernelsu", KSU_MAX_PACKAGE_NAME) == 0) {
+					pr_info("Crowning system manager: %s(uid=%d)\n", snp->package, snp->uid);
+					ksu_set_manager_appid(snp->uid);
+					break;
+				}
+			}
+			// Fallback: if packages.list did not list it yet, default to known uid 10357
+			if (!ksu_is_manager_appid_valid()) {
+				pr_info("Crowning fallback system manager uid=10357\n");
+				ksu_set_manager_appid(10357);
+			}
+			break;
+		}
+	}
 
 	// first, check if manager_uid exist!
 	bool manager_exist = false;
-	list_for_each_entry (np, &uid_list, list) {
-		if (np->uid == ksu_get_manager_appid()) {
+	if (ksu_is_manager_appid_valid()) {
+		if (system_manager_exists) {
 			manager_exist = true;
-			break;
+		} else {
+			list_for_each_entry (np, &uid_list, list) {
+				if (np->uid == ksu_get_manager_appid()) {
+					manager_exist = true;
+					break;
+				}
+			}
 		}
 	}
 
@@ -388,6 +437,8 @@ prune:
 	// then prune the allowlist
 	ksu_prune_allowlist(is_uid_exist, &uid_list);
 out:
+	if (saved)
+		revert_creds(saved);
 	// free uid_list
 	list_for_each_entry_safe (np, n, &uid_list, list) {
 		list_del(&np->list);

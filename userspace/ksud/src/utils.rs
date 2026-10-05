@@ -179,7 +179,8 @@ pub fn has_magisk() -> bool {
 fn link_ksud_to_bin() -> Result<()> {
     let ksu_bin = PathBuf::from(defs::DAEMON_PATH);
     let ksu_bin_link = PathBuf::from(defs::DAEMON_LINK_PATH);
-    if ksu_bin.exists() && !ksu_bin_link.exists() {
+    let _ = std::fs::remove_file(&ksu_bin_link);
+    if ksu_bin.exists() {
         std::os::unix::fs::symlink(&ksu_bin, &ksu_bin_link)?;
     }
     Ok(())

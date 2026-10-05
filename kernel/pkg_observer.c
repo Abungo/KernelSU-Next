@@ -129,17 +129,22 @@ int ksu_observer_init(void)
 {
 	int ret = 0;
 
+	if (!g) {
 #if LINUX_VERSION_CODE >= KERNEL_VERSION(6, 0, 0)
-	g = fsnotify_alloc_group(&ksu_ops, 0);
+		g = fsnotify_alloc_group(&ksu_ops, 0);
 #else
-	g = fsnotify_alloc_group(&ksu_ops);
+		g = fsnotify_alloc_group(&ksu_ops);
 #endif
-	if (IS_ERR(g))
-		return PTR_ERR(g);
+		if (IS_ERR(g))
+			return PTR_ERR(g);
+	}
 
-	ret = watch_one_dir(&g_watch);
-	pr_info("observer init done\n");
-	return 0;
+	if (!g_watch.mark) {
+		ret = watch_one_dir(&g_watch);
+		if (ret == 0)
+			pr_info("observer init done\n");
+	}
+	return ret;
 }
 
 void ksu_observer_exit(void)
